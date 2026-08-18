@@ -1,9 +1,13 @@
 // db.js — persistence layer, built entirely on Node's built-in node:sqlite (no dependencies).
+const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const DB_PATH = path.join(__dirname, 'data', 'rita.db');
+const DATA_DIR = path.join(__dirname, 'data');
+fs.mkdirSync(DATA_DIR, { recursive: true }); // some deploy methods (e.g. GitHub's web upload) drop empty dirs
+
+const DB_PATH = path.join(DATA_DIR, 'rita.db');
 const db = new DatabaseSync(DB_PATH);
 
 db.exec(`
