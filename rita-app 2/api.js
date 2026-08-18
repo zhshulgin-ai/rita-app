@@ -11,7 +11,9 @@ const {
   clearSessionCookie,
 } = require('./auth');
 
-const UPLOADS_DIR = path.join(__dirname, 'uploads');
+// Same persistent-volume story as db.js — see the DATA_DIR comment there.
+const DATA_ROOT = process.env.DATA_DIR || __dirname;
+const UPLOADS_DIR = path.join(DATA_ROOT, 'uploads');
 fs.mkdirSync(UPLOADS_DIR, { recursive: true }); // some deploy methods (e.g. GitHub's web upload) drop empty dirs
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024; // 8MB decoded
 
