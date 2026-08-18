@@ -1,13 +1,15 @@
 :root {
-  --bg: #faf6f0;
-  --surface: #ffffff;
-  --ink: #2b2420;
-  --ink-soft: #6b6058;
-  --accent: #c9622f;
-  --accent-soft: #f3ddc9;
-  --accent-ink: #7a3a15;
-  --line: #ece3d8;
-  --danger: #b3432b;
+  --bg: #f6f1e7;
+  --surface: #fffdfa;
+  --ink: #241f1a;
+  --ink-soft: #6d6255;
+  --accent: #b8501f;
+  --accent-soft: #f0dcc4;
+  --accent-ink: #6e3110;
+  --accent2: #5f6f4f;
+  --accent2-soft: #e3e6d8;
+  --line: #e9decd;
+  --danger: #a83a26;
   --radius: 16px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
@@ -20,7 +22,7 @@ html, body {
   padding: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -80,6 +82,17 @@ button:active, .btn:active, .nav-btn:active, .avatar-edit:active {
   line-height: 1;
   padding: 2px 4px;
   cursor: pointer;
+}
+
+.topbar-back {
+  background: none;
+  border: none;
+  color: var(--accent-ink);
+  font-size: 22px;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+  width: 26px;
 }
 
 .screen {
@@ -189,6 +202,7 @@ button:active, .btn:active, .nav-btn:active, .avatar-edit:active {
 .btn:active { opacity: 0.9; }
 .btn.secondary { background: var(--accent-soft); color: var(--accent-ink); box-shadow: none; }
 .btn.ghost { background: transparent; color: var(--accent-ink); border: 1px solid var(--line); box-shadow: none; }
+.btn.claimed { background: var(--accent2-soft); color: var(--accent2); box-shadow: none; }
 .btn.small { width: auto; padding: 8px 14px; font-size: 14px; }
 .btn.danger { background: var(--danger); }
 .btn[disabled] { opacity: 0.5; }
@@ -410,11 +424,53 @@ details[open] .profile-edit-summary { margin-bottom: 12px; }
 }
 
 .list-row:last-child { border-bottom: none; }
+.list-row.friend-row { cursor: pointer; }
+.list-row.friend-row:active { background: var(--accent-soft); border-radius: 10px; }
+
+/* "coming up" horizontal strip, Facebook-style */
+.upcoming-scroll {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 2px 4px 14px;
+  -webkit-overflow-scrolling: touch;
+}
+.upcoming-item {
+  background: none; border: none; flex-shrink: 0; width: 66px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  cursor: pointer;
+}
+.upcoming-badge {
+  font-size: 10.5px; font-weight: 700; color: var(--accent-ink);
+  background: var(--accent-soft); padding: 2px 7px; border-radius: 999px;
+  margin-top: -14px; border: 2px solid var(--bg);
+}
+.upcoming-name { font-size: 12px; color: var(--ink-soft); font-weight: 600; max-width: 66px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* individual friend page */
+.friend-detail-header { text-align: center; padding: 6px 20px 16px; }
+.friend-detail-header .avatar { margin: 0 auto 8px; }
+.friend-detail-header .name { font-weight: 700; font-size: 17px; }
+.occ-note { font-size: 12.5px; color: var(--accent-ink); font-weight: 600; margin-top: 3px; }
+
+.sort-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.sort-btn {
+  flex: 1; text-align: center; padding: 9px 8px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 700; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink-soft); cursor: pointer;
+}
+.sort-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.filter-row { margin-bottom: 12px; }
+.filter-select {
+  font-size: 12.5px; color: var(--ink-soft); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px;
+}
 
 /* avatars: a div (initials fallback) or an img (real photo), same box */
 .avatar {
   width: 40px; height: 40px;
-  border-radius: 50%;
+  border-radius: 22%;
   flex-shrink: 0;
   font-weight: 700;
   font-size: 15px;
