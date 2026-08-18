@@ -13,7 +13,10 @@ function requireAuthHelpers() {
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
-const UPLOADS_DIR = path.join(__dirname, 'uploads');
+// Must match the DATA_DIR logic in db.js/api.js — this is where uploaded photos actually
+// live (a persistent Railway volume in production), not just a folder next to the code.
+const DATA_ROOT = process.env.DATA_DIR || __dirname;
+const UPLOADS_DIR = path.join(DATA_ROOT, 'uploads');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
