@@ -12,6 +12,7 @@ const {
 } = require('./auth');
 
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
+fs.mkdirSync(UPLOADS_DIR, { recursive: true }); // some deploy methods (e.g. GitHub's web upload) drop empty dirs
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024; // 8MB decoded
 
 class ApiError extends Error {
