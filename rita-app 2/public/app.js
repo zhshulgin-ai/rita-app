@@ -381,33 +381,49 @@
     return card;
   }
 
-  // ---------------------------------------------------------------- shared moment card (used on profile grid)
-  function renderMomentCard(m, opts = {}) {
+  // ---------------------------------------------------------------- own moments, shown on the profile as feed-style posts
+  function renderOwnMomentPost(m) {
     const card = document.createElement('div');
-    card.className = 'moment-card';
+    card.className = 'feed-post';
     card.innerHTML = `
+      <div class="feed-post-header">
+        <div class="feed-user-row">
+          <div class="row-main">
+            ${avatarNode(state.user)}
+            <span class="feed-username">${esc(handle(state.user.name))}</span>
+          </div>
+        </div>
+        <div class="feed-meta-row">
+          <span class="feed-date">${formatShortDate(m.created_at)}</span>
+          ${m.location ? `
+          <span class="meta-dot">·</span>
+          <a class="feed-location-link" href="${mapsUrl(m.location)}" target="_blank" rel="noopener">📍 ${esc(m.location)}</a>
+          ` : ''}
+        </div>
+      </div>
       ${m.photo_path
-        ? `<img class="moment-photo" src="${esc(m.photo_path)}" alt="" />`
-        : `<div class="moment-photo placeholder">✨</div>`}
-      <div class="moment-body">
-        <span class="moment-rating">Wants it ${m.rating}/10</span>
-        ${m.note ? `<div class="moment-note">${esc(m.note)}</div>` : ''}
-        ${m.location ? `<div class="moment-location">📍 ${esc(m.location)}</div>` : ''}
+        ? `<img class="feed-photo" src="${esc(m.photo_path)}" alt="" />`
+        : `<div class="feed-photo placeholder">✨</div>`}
+      <div class="feed-body">
+        <div class="rating-bar-row">
+          <div class="rating-bar-track"><div class="rating-bar-fill" style="width:${m.rating * 10}%"></div></div>
+          <span class="rating-bar-label">${m.rating}/10</span>
+        </div>
+        ${m.note ? `<div class="feed-caption">${esc(m.note)}</div>` : ''}
         <div class="moment-actions"></div>
       </div>
     `;
+    card.querySelector('.feed-date').title = formatPostDate(m.created_at);
     const actions = card.querySelector('.moment-actions');
-    if (opts.deletable) {
-      const btn = document.createElement('button');
-      btn.className = 'btn small ghost';
-      btn.textContent = 'Delete';
-      btn.addEventListener('click', async () => {
-        if (!confirm('Remove this saved moment?')) return;
-        await api('DELETE', `/api/moments/${m.id}`);
-        loadViewData('profile');
-      });
-      actions.appendChild(btn);
-    }
+    const btn = document.createElement('button');
+    btn.className = 'btn small ghost';
+    btn.textContent = 'Delete';
+    btn.addEventListener('click', async () => {
+      if (!confirm('Remove this saved moment?')) return;
+      await api('DELETE', `/api/moments/${m.id}`);
+      loadViewData('profile');
+    });
+    actions.appendChild(btn);
     return card;
   }
 
@@ -440,11 +456,53 @@
         </div>
         <div class="field">
           <label>Where did you see it? (optional)</label>
-          <input name="location" placeholder="Flea market, downtown" />
+          <div class="location-input-row">
+            <input name="location" id="location-input" placeholder="Flea market, downtown" />
+            <button type="button" class="btn small secondary location-btn" id="use-location-btn">📍 Use my location</button>
+          </div>
         </div>
         <button class="btn" type="submit">Save this moment</button>
       </form>
     `;
+    const locBtn = el.querySelector('#use-location-btn');
+    const locInput = el.querySelector('#location-input');
+    locBtn.addEventListener('click', () => {
+      if (!navigator.geolocation) {
+        alert("Your browser doesn't support location.");
+        return;
+      }
+      locBtn.disabled = true;
+      locBtn.textContent = 'Locating…';
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const { latitude, longitude } = pos.coords;
+          try {
+            const res = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=16&addressdetails=1`,
+              { headers: { Accept: 'application/json' } }
+            );
+            const data = await res.json();
+            const a = data.address || {};
+            const label =
+              a.attraction || a.shop || a.amenity || a.building || a.leisure ||
+              a.road || a.neighbourhood || a.suburb || a.village || a.town || a.city ||
+              data.display_name;
+            locInput.value = label || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+          } catch {
+            locInput.value = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+          } finally {
+            locBtn.disabled = false;
+            locBtn.textContent = '📍 Use my location';
+          }
+        },
+        () => {
+          alert("Couldn't get your location — check your browser's location permission for this site.");
+          locBtn.disabled = false;
+          locBtn.textContent = '📍 Use my location';
+        },
+        { enableHighAccuracy: false, timeout: 8000 }
+      );
+    });
     function handlePhotoFile(file) {
       if (!file) return;
       const reader = new FileReader();
@@ -654,10 +712,10 @@
           Nothing saved yet. Next time you spot something that feels like <em>you</em>, save it.
         </div>`;
     } else {
-      const grid = document.createElement('div');
-      grid.className = 'moment-grid';
-      state.myMoments.forEach((m) => grid.appendChild(renderMomentCard(m, { deletable: true })));
-      gridWrap.appendChild(grid);
+      const list = document.createElement('div');
+      list.className = 'own-feed';
+      state.myMoments.forEach((m) => list.appendChild(renderOwnMomentPost(m)));
+      gridWrap.appendChild(list);
     }
     return el;
   }
