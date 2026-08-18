@@ -4,7 +4,10 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const DATA_DIR = path.join(__dirname, 'data');
+// DATA_DIR lets us point at a persistent Railway volume (e.g. "/data") in production;
+// without it, everything here lives on the container's ephemeral disk and is wiped on redeploy.
+const DATA_ROOT = process.env.DATA_DIR || __dirname;
+const DATA_DIR = path.join(DATA_ROOT, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true }); // some deploy methods (e.g. GitHub's web upload) drop empty dirs
 
 const DB_PATH = path.join(DATA_DIR, 'rita.db');
