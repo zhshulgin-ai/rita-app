@@ -1,0 +1,602 @@
+// app.js — the entire client. No build step, no framework: state + string templates + DOM.
+(() => {
+  'use strict';
+
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const app = document.getElementById('app');
+
+  const state = {
+    user: null,
+    view: 'feed', // feed | capture | friends | profile
+    authMode: 'login', // login | signup
+    error: null,
+    loading: true,
+    occasions: null, // powers the feed
+    myMoments: null, // used on the profile grid
+    friends: null,
+    inviteCode: null,
+    pendingInviteCode: new URLSearchParams(location.search).get('invite') || '',
+    photoDataUrl: null,
+  };
+
+  // ---------------------------------------------------------------- helpers
+  function esc(str) {
+    return String(str ?? '').replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  }
+
+  function initials(name) {
+    return (name || '?')
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase() || '')
+      .join('');
+  }
+
+  function birthdayPill(days) {
+    if (days === null) return '<span class="pill">No birthday set</span>';
+    const label = days === 0 ? 'Today! 🎉' : days === 1 ? 'Tomorrow' : `In ${days} days`;
+    return `<span class="pill ${days <= 45 ? 'soon' : ''}">${label}</span>`;
+  }
+
+  function handle(name) {
+    return (name || '').toLowerCase().replace(/\s+/g, '');
+  }
+
+  function formatPostDate(iso) {
+    const d = new Date(iso);
+    return `${MONTHS_FULL[d.getMonth()]}, ${d.getDate()}. ${d.getFullYear()}`;
+  }
+
+  function mapsUrl(location) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
+  }
+
+  async function api(method, path, body) {
+    const res = await fetch(path, {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    let data = {};
+    try { data = await res.json(); } catch { /* no body */ }
+    if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+    return data;
+  }
+
+  function setView(view) {
+    state.view = view;
+    state.error = null;
+    render();
+    loadViewData(view);
+  }
+
+  // ---------------------------------------------------------------- data loading
+  async function loadOccasions() {
+    const { occasions } = await api('GET', '/api/occasions');
+    state.occasions = occasions;
+  }
+
+  async function loadViewData(view) {
+    try {
+      if (view === 'feed') {
+        if (state.occasions === null) render();
+        await loadOccasions();
+      } else if (view === 'friends') {
+        state.friends = null; render();
+        const { friends, inviteCode } = await api('GET', '/api/friends');
+        state.friends = friends;
+        state.inviteCode = inviteCode;
+      } else if (view === 'profile') {
+        state.myMoments = null; render();
+        const { moments } = await api('GET', '/api/moments');
+        state.myMoments = moments;
+      }
+      render();
+    } catch (e) {
+      state.error = e.message;
+      render();
+    }
+  }
+
+  // ---------------------------------------------------------------- render root
+  function render() {
+    app.innerHTML = '';
+    if (state.loading) {
+      app.innerHTML = '<div class="spinner-row">Loading Rita…</div>';
+      return;
+    }
+    if (!state.user) {
+      app.appendChild(renderAuth());
+      return;
+    }
+    const wrap = document.createElement('div');
+    wrap.style.display = 'contents';
+    wrap.appendChild(renderTopbar());
+    wrap.appendChild(renderScreen());
+    wrap.appendChild(renderBottomNav());
+    app.appendChild(wrap);
+  }
+
+  // ---------------------------------------------------------------- auth screens
+  function renderAuth() {
+    const el = document.createElement('div');
+    el.className = 'auth-screen';
+    const isLogin = state.authMode === 'login';
+    el.innerHTML = `
+      <div class="auth-hero">
+        <span class="wordmark">Rita</span>
+        <p>Save the moments where you noticed something —<br>so the people who love you don't have to guess.</p>
+      </div>
+      ${state.error ? `<div class="error-banner">${esc(state.error)}</div>` : ''}
+      <form id="auth-form">
+        ${!isLogin ? `
+        <div class="field"><label>Your name</label><input name="name" required autocomplete="name" /></div>
+        ` : ''}
+        <div class="field"><label>Email</label><input name="email" type="email" required autocomplete="email" /></div>
+        <div class="field"><label>Password</label><input name="password" type="password" required minlength="6" autocomplete="${isLogin ? 'current-password' : 'new-password'}" /></div>
+        ${!isLogin ? `
+        <div class="field-row">
+          <div class="field">
+            <label>Birth month</label>
+            <select name="birthdayMonth"><option value="">—</option>${MONTHS.map((m, i) => `<option value="${i + 1}">${m}</option>`).join('')}</select>
+          </div>
+          <div class="field">
+            <label>Birth day</label>
+            <input name="birthdayDay" type="number" min="1" max="31" placeholder="14" />
+          </div>
+        </div>
+        ` : ''}
+        <button class="btn" type="submit">${isLogin ? 'Log in' : 'Create account'}</button>
+      </form>
+      <div style="text-align:center; margin-top:16px;">
+        ${isLogin
+          ? `New to Rita? <button class="link-btn" id="switch-mode">Create an account</button>`
+          : `Already have an account? <button class="link-btn" id="switch-mode">Log in</button>`}
+      </div>
+    `;
+    el.querySelector('#switch-mode').addEventListener('click', () => {
+      state.authMode = isLogin ? 'signup' : 'login';
+      state.error = null;
+      render();
+    });
+    el.querySelector('#auth-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const payload = Object.fromEntries(fd.entries());
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      try {
+        const { user } = await api('POST', isLogin ? '/api/login' : '/api/signup', payload);
+        state.user = user;
+        state.error = null;
+        setView('feed');
+      } catch (err) {
+        state.error = err.message;
+        render();
+      }
+    });
+    return el;
+  }
+
+  // ---------------------------------------------------------------- shell
+  function renderTopbar() {
+    const el = document.createElement('div');
+    el.className = 'topbar';
+    const titles = { feed: '', capture: 'Save a moment', friends: 'Your circle', profile: 'Profile' };
+    el.innerHTML = `
+      <h1>${state.view === 'feed' ? '<span class="wordmark">Rita</span>' : esc(titles[state.view] || '')}</h1>
+      ${state.view !== 'capture' ? '<button class="topbar-add" id="topbar-add" aria-label="Save a Rita">+</button>' : ''}
+    `;
+    const addBtn = el.querySelector('#topbar-add');
+    if (addBtn) addBtn.addEventListener('click', () => setView('capture'));
+    return el;
+  }
+
+  function renderBottomNav() {
+    const el = document.createElement('div');
+    el.className = 'bottom-nav';
+    const items = [
+      { id: 'feed', icon: '🖼️', label: 'Feed' },
+      { id: 'friends', icon: '👥', label: 'Circle' },
+      { id: 'profile', icon: '🙂', label: 'Profile' },
+    ];
+    el.innerHTML = items.map((it) => `
+      <button class="nav-btn ${it.fab ? 'fab' : ''} ${state.view === it.id ? 'active' : ''}" data-view="${it.id}">
+        <span class="icon">${it.icon}</span>
+        <span>${it.label}</span>
+      </button>
+    `).join('');
+    el.querySelectorAll('.nav-btn').forEach((btn) => {
+      btn.addEventListener('click', () => setView(btn.dataset.view));
+    });
+    return el;
+  }
+
+  function renderScreen() {
+    const el = document.createElement('div');
+    el.className = 'screen';
+    if (state.view === 'feed') el.classList.add('screen-feed');
+    if (state.error) {
+      const banner = document.createElement('div');
+      banner.className = 'error-banner';
+      banner.textContent = state.error;
+      el.appendChild(banner);
+    }
+    const map = { feed: renderFeed, capture: renderCapture, friends: renderFriends, profile: renderProfile };
+    el.appendChild((map[state.view] || renderFeed)());
+    return el;
+  }
+
+  // ---------------------------------------------------------------- feed (Instagram-style, the landing screen)
+  function renderFeed() {
+    const el = document.createElement('div');
+    if (state.occasions === null) {
+      el.innerHTML = '<div class="spinner-row">Loading…</div>';
+      return el;
+    }
+    if (state.occasions.length === 0) {
+      el.innerHTML = `
+        <div class="empty-state">
+          <span class="emoji">👥</span>
+          Add people to your circle to start seeing what they've saved.
+        </div>`;
+      const btn = document.createElement('button');
+      btn.className = 'btn';
+      btn.textContent = 'Go to your circle';
+      btn.addEventListener('click', () => setView('friends'));
+      el.querySelector('.empty-state').after(btn);
+      return el;
+    }
+
+    const posts = [];
+    state.occasions.forEach((occ) => {
+      occ.moments.forEach((m) => posts.push({ ...m, friend: occ.friend, daysUntilBirthday: occ.daysUntilBirthday }));
+    });
+    posts.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    if (posts.length === 0) {
+      el.innerHTML = `
+        <div class="empty-state">
+          <span class="emoji">✨</span>
+          No one in your circle has saved anything yet. Once they do, it shows up here.
+        </div>`;
+      return el;
+    }
+
+    posts.forEach((post) => el.appendChild(renderFeedPost(post)));
+    return el;
+  }
+
+  function renderFeedPost(post) {
+    const card = document.createElement('div');
+    card.className = 'feed-post';
+    card.innerHTML = `
+      <div class="feed-post-header">
+        <div class="feed-user-row">
+          <div class="row-main">
+            <div class="avatar">${esc(initials(post.friend.name))}</div>
+            <span class="feed-username">${esc(handle(post.friend.name))}</span>
+          </div>
+          <span class="follow-pill" title="${post.daysUntilBirthday === null ? 'No birthday set' : birthdayPill(post.daysUntilBirthday).replace(/<[^>]+>/g, '')}">in circle</span>
+        </div>
+        <div class="feed-meta-row">
+          <span class="feed-date">${formatPostDate(post.created_at)}</span>
+          ${post.location ? `
+          <a class="feed-location" href="${mapsUrl(post.location)}" target="_blank" rel="noopener">
+            <span class="pin">📍</span><span>find on<br>the map</span>
+          </a>` : ''}
+        </div>
+      </div>
+      ${post.photo_path
+        ? `<img class="feed-photo" src="${esc(post.photo_path)}" alt="" />`
+        : `<div class="feed-photo placeholder">✨</div>`}
+      <div class="feed-body">
+        <div class="rating-bar-row">
+          <div class="rating-bar-track"><div class="rating-bar-fill" style="width:${post.rating * 10}%"></div></div>
+          <span class="rating-bar-label">${post.rating}/10</span>
+        </div>
+        ${post.note ? `<div class="feed-caption">${esc(post.note)}</div>` : ''}
+        <div class="moment-actions"></div>
+      </div>
+    `;
+    const actions = card.querySelector('.moment-actions');
+    if (post.claimedByMe) {
+      const btn = document.createElement('button');
+      btn.className = 'btn small secondary';
+      btn.textContent = '✓ Getting this';
+      btn.addEventListener('click', async () => {
+        await api('DELETE', `/api/moments/${post.id}/claim`);
+        loadViewData('feed');
+      });
+      actions.appendChild(btn);
+    } else {
+      const btn = document.createElement('button');
+      btn.className = 'btn small ghost';
+      btn.textContent = 'Claim this';
+      btn.addEventListener('click', async () => {
+        await api('POST', `/api/moments/${post.id}/claim`);
+        loadViewData('feed');
+      });
+      actions.appendChild(btn);
+    }
+    if (post.claimCount > 0) {
+      const note = document.createElement('div');
+      note.className = 'claim-note';
+      note.textContent = post.claimedByMe && post.claimCount === 1
+        ? 'Only you, so far'
+        : `Considered by: ${esc(post.claimedBy.join(', '))}`;
+      actions.after(note);
+    }
+    return card;
+  }
+
+  // ---------------------------------------------------------------- shared moment card (used on profile grid)
+  function renderMomentCard(m, opts = {}) {
+    const card = document.createElement('div');
+    card.className = 'moment-card';
+    card.innerHTML = `
+      ${m.photo_path
+        ? `<img class="moment-photo" src="${esc(m.photo_path)}" alt="" />`
+        : `<div class="moment-photo placeholder">✨</div>`}
+      <div class="moment-body">
+        <span class="moment-rating">Wants it ${m.rating}/10</span>
+        ${m.note ? `<div class="moment-note">${esc(m.note)}</div>` : ''}
+        ${m.location ? `<div class="moment-location">📍 ${esc(m.location)}</div>` : ''}
+        <div class="moment-actions"></div>
+      </div>
+    `;
+    const actions = card.querySelector('.moment-actions');
+    if (opts.deletable) {
+      const btn = document.createElement('button');
+      btn.className = 'btn small ghost';
+      btn.textContent = 'Delete';
+      btn.addEventListener('click', async () => {
+        if (!confirm('Remove this saved moment?')) return;
+        await api('DELETE', `/api/moments/${m.id}`);
+        loadViewData('profile');
+      });
+      actions.appendChild(btn);
+    }
+    return card;
+  }
+
+  // ---------------------------------------------------------------- capture
+  function renderCapture() {
+    const el = document.createElement('div');
+    el.innerHTML = `
+      <div class="photo-picker" id="photo-picker">
+        ${state.photoDataUrl
+          ? `<img class="photo-preview" src="${state.photoDataUrl}" alt="" />`
+          : `<div class="photo-picker-empty">✨<br><span style="font-size:12px;">Add a photo — optional, but it helps you remember</span></div>`}
+      </div>
+      <div class="photo-source-row">
+        <label class="btn secondary small photo-source-btn">
+          📷 Take a photo
+          <input type="file" accept="image/*" capture="environment" id="photo-input-camera" />
+        </label>
+        <label class="btn ghost small photo-source-btn">
+          🖼️ Add a screenshot
+          <input type="file" accept="image/*" id="photo-input-library" />
+        </label>
+      </div>
+      <form id="capture-form">
+        <div class="rating-value" id="rating-value">6</div>
+        <div class="rating-caption">How much do they want it?</div>
+        <input class="rating-slider" type="range" min="1" max="10" value="6" id="rating-slider" name="rating" />
+        <div class="field">
+          <label>What's the story?</label>
+          <textarea name="note" placeholder="Loved this band when I was younger…"></textarea>
+        </div>
+        <div class="field">
+          <label>Where did you see it? (optional)</label>
+          <input name="location" placeholder="Flea market, downtown" />
+        </div>
+        <button class="btn" type="submit">Save this moment</button>
+      </form>
+    `;
+    function handlePhotoFile(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        state.photoDataUrl = reader.result;
+        render();
+      };
+      reader.readAsDataURL(file);
+    }
+    el.querySelector('#photo-input-camera').addEventListener('change', (e) => handlePhotoFile(e.target.files[0]));
+    el.querySelector('#photo-input-library').addEventListener('change', (e) => handlePhotoFile(e.target.files[0]));
+    const slider = el.querySelector('#rating-slider');
+    slider.addEventListener('input', () => {
+      el.querySelector('#rating-value').textContent = slider.value;
+    });
+    el.querySelector('#capture-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Saving…';
+      try {
+        await api('POST', '/api/moments', {
+          rating: Number(fd.get('rating')),
+          note: fd.get('note'),
+          location: fd.get('location'),
+          photoDataUrl: state.photoDataUrl,
+        });
+        state.photoDataUrl = null;
+        setView('profile');
+      } catch (err) {
+        state.error = err.message;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Save this moment';
+        render();
+      }
+    });
+    return el;
+  }
+
+  // ---------------------------------------------------------------- friends
+  function renderFriends() {
+    const el = document.createElement('div');
+    const inviteUrl = state.inviteCode ? `${location.origin}/?invite=${state.inviteCode}` : '';
+    el.innerHTML = `
+      <div class="section-title">Your invite</div>
+      <div class="card">
+        <div style="font-size:14px; color:var(--ink-soft);">Share this so friends can join your circle.</div>
+        <div class="invite-box">
+          <span class="invite-code" id="invite-code">${state.inviteCode ? esc(state.inviteCode) : '…'}</span>
+          <button class="btn small secondary" id="copy-invite">Copy link</button>
+        </div>
+      </div>
+      <div class="section-title">Join someone's circle</div>
+      <div class="card">
+        <form id="connect-form">
+          <div class="field">
+            <label>Their invite code</label>
+            <input name="code" id="connect-input" value="${esc(state.pendingInviteCode)}" placeholder="e.g. 4f2a91c8d0" required />
+          </div>
+          <button class="btn secondary" type="submit">Connect</button>
+        </form>
+      </div>
+      <div class="section-title">People in your circle</div>
+      <div class="card" id="friends-list"></div>
+    `;
+    el.querySelector('#copy-invite').addEventListener('click', async () => {
+      const btn = el.querySelector('#copy-invite');
+      try {
+        await navigator.clipboard.writeText(inviteUrl || state.inviteCode);
+        btn.textContent = 'Copied!';
+        setTimeout(() => (btn.textContent = 'Copy link'), 1500);
+      } catch {
+        alert(`Share this code: ${state.inviteCode}`);
+      }
+    });
+    el.querySelector('#connect-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      try {
+        await api('POST', '/api/friends/connect', { code: fd.get('code') });
+        state.pendingInviteCode = '';
+        loadViewData('friends');
+      } catch (err) {
+        state.error = err.message;
+        render();
+      }
+    });
+
+    const list = el.querySelector('#friends-list');
+    if (state.friends === null) {
+      list.innerHTML = '<div class="spinner-row">Loading…</div>';
+    } else if (state.friends.length === 0) {
+      list.innerHTML = '<div class="empty-state" style="padding:20px 4px;">No one yet — share your invite above.</div>';
+    } else {
+      list.innerHTML = state.friends.map((f) => `
+        <div class="list-row">
+          <div class="row-main">
+            <div class="avatar">${esc(initials(f.name))}</div>
+            <div>
+              <div class="row-title">${esc(f.name)}</div>
+              <div class="row-sub">${f.birthdayMonth ? `${MONTHS[f.birthdayMonth - 1]} ${f.birthdayDay}` : 'No birthday set'}</div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+    return el;
+  }
+
+  // ---------------------------------------------------------------- profile (own info + own moments grid)
+  function renderProfile() {
+    const el = document.createElement('div');
+    const u = state.user;
+    el.innerHTML = `
+      <div class="profile-header">
+        <div class="avatar">${esc(initials(u.name))}</div>
+        <div class="name">${esc(u.name)}</div>
+        <div class="email">${esc(u.email)}</div>
+      </div>
+      <details class="card">
+        <summary class="profile-edit-summary">Edit profile</summary>
+        <form id="profile-form">
+          <div class="field"><label>Name</label><input name="name" value="${esc(u.name)}" required /></div>
+          <div class="field-row">
+            <div class="field">
+              <label>Birth month</label>
+              <select name="birthdayMonth">
+                <option value="">—</option>
+                ${MONTHS.map((m, i) => `<option value="${i + 1}" ${u.birthdayMonth === i + 1 ? 'selected' : ''}>${m}</option>`).join('')}
+              </select>
+            </div>
+            <div class="field">
+              <label>Birth day</label>
+              <input name="birthdayDay" type="number" min="1" max="31" value="${u.birthdayDay || ''}" />
+            </div>
+          </div>
+          <div class="field"><label>About you (optional)</label><textarea name="bio" placeholder="Anything worth knowing about your taste">${esc(u.bio || '')}</textarea></div>
+          <button class="btn" type="submit">Save changes</button>
+        </form>
+      </details>
+      <div class="section-title">Your moments</div>
+      <div id="my-moments-grid"></div>
+      <button class="btn ghost" id="logout-btn" style="margin-top:20px;">Log out</button>
+    `;
+    el.querySelector('#profile-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      try {
+        const { user } = await api('PUT', '/api/me', {
+          name: fd.get('name'),
+          bio: fd.get('bio'),
+          birthdayMonth: fd.get('birthdayMonth') || null,
+          birthdayDay: fd.get('birthdayDay') || null,
+        });
+        state.user = user;
+        render();
+      } catch (err) {
+        state.error = err.message;
+        render();
+      }
+    });
+    el.querySelector('#logout-btn').addEventListener('click', async () => {
+      await api('POST', '/api/logout');
+      state.user = null;
+      state.view = 'feed';
+      render();
+    });
+
+    const gridWrap = el.querySelector('#my-moments-grid');
+    if (state.myMoments === null) {
+      gridWrap.innerHTML = '<div class="spinner-row">Loading…</div>';
+    } else if (state.myMoments.length === 0) {
+      gridWrap.innerHTML = `
+        <div class="empty-state">
+          <span class="emoji">✨</span>
+          Nothing saved yet. Next time you spot something that feels like <em>you</em>, save it.
+        </div>`;
+    } else {
+      const grid = document.createElement('div');
+      grid.className = 'moment-grid';
+      state.myMoments.forEach((m) => grid.appendChild(renderMomentCard(m, { deletable: true })));
+      gridWrap.appendChild(grid);
+    }
+    return el;
+  }
+
+  // ---------------------------------------------------------------- boot
+  async function boot() {
+    try {
+      const { user } = await api('GET', '/api/me');
+      state.user = user;
+    } catch {
+      state.user = null;
+    }
+    state.loading = false;
+    render();
+    if (state.user) loadViewData('feed');
+  }
+
+  boot();
+})();

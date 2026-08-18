@@ -1,0 +1,13 @@
+{
+  "name": "rita-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Rita — save the moments where you noticed something, so the people who love you don't have to guess.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}
