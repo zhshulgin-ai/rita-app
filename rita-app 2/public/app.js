@@ -16,7 +16,7 @@
 
   const state = {
     user: null,
-    view: 'feed', // feed | capture | friends | profile
+    view: 'feed', // feed | capture | friends | friend | profile
     authMode: 'login', // login | signup
     error: null,
     loading: true,
@@ -26,6 +26,10 @@
     inviteCode: null,
     pendingInviteCode: new URLSearchParams(location.search).get('invite') || '',
     photoDataUrl: null,
+    friendDetailId: null,
+    friendDetail: null, // { friend, moments }
+    friendSort: 'new', // new | rating
+    friendPeriod: 'all', // 'all' or 'YYYY-MM'
   };
 
   // ---------------------------------------------------------------- helpers
@@ -112,6 +116,17 @@
     loadViewData(view);
   }
 
+  function openFriend(friendId) {
+    state.view = 'friend';
+    state.friendDetailId = friendId;
+    state.friendDetail = null;
+    state.friendSort = 'new';
+    state.friendPeriod = 'all';
+    state.error = null;
+    render();
+    loadViewData('friend');
+  }
+
   // ---------------------------------------------------------------- data loading
   async function loadOccasions() {
     const { occasions } = await api('GET', '/api/occasions');
@@ -128,6 +143,9 @@
         const { friends, inviteCode } = await api('GET', '/api/friends');
         state.friends = friends;
         state.inviteCode = inviteCode;
+      } else if (view === 'friend') {
+        const { friend, moments } = await api('GET', `/api/friends/${state.friendDetailId}/moments`);
+        state.friendDetail = { friend, moments };
       } else if (view === 'profile') {
         state.myMoments = null; render();
         const [momentsRes, friendsRes] = await Promise.all([
@@ -231,7 +249,17 @@
   function renderTopbar() {
     const el = document.createElement('div');
     el.className = 'topbar';
-    const titles = { feed: '', capture: 'Save a moment', friends: 'Your circle', profile: 'Profile' };
+    const titles = { feed: '', capture: 'Save a moment', friends: 'Circle', profile: 'Profile' };
+    if (state.view === 'friend') {
+      const name = state.friendDetail ? state.friendDetail.friend.name : '…';
+      el.innerHTML = `
+        <button class="topbar-back" id="topbar-back" aria-label="Back">←</button>
+        <h1>${esc(name)}</h1>
+        <span style="width:26px;"></span>
+      `;
+      el.querySelector('#topbar-back').addEventListener('click', () => setView('friends'));
+      return el;
+    }
     el.innerHTML = `
       <h1>${state.view === 'feed' ? '<span class="wordmark">Rita</span>' : esc(titles[state.view] || '')}</h1>
       ${state.view !== 'capture' ? '<button class="topbar-add" id="topbar-add" aria-label="Save a Rita">+</button>' : ''}
@@ -249,12 +277,15 @@
       { id: 'friends', icon: ICONS.circle, label: 'Circle' },
       { id: 'profile', icon: ICONS.profile, label: 'Profile' },
     ];
-    el.innerHTML = items.map((it) => `
-      <button class="nav-btn ${state.view === it.id ? 'active' : ''}" data-view="${it.id}">
+    el.innerHTML = items.map((it) => {
+      const isActive = state.view === it.id || (it.id === 'friends' && state.view === 'friend');
+      return `
+      <button class="nav-btn ${isActive ? 'active' : ''}" data-view="${it.id}">
         <span class="icon">${it.icon}</span>
         <span>${it.label}</span>
       </button>
-    `).join('');
+    `;
+    }).join('');
     el.querySelectorAll('.nav-btn').forEach((btn) => {
       btn.addEventListener('click', () => setView(btn.dataset.view));
     });
@@ -271,7 +302,7 @@
       banner.textContent = state.error;
       el.appendChild(banner);
     }
-    const map = { feed: renderFeed, capture: renderCapture, friends: renderFriends, profile: renderProfile };
+    const map = { feed: renderFeed, capture: renderCapture, friends: renderFriends, friend: renderFriendDetail, profile: renderProfile };
     el.appendChild((map[state.view] || renderFeed)());
     return el;
   }
@@ -294,7 +325,7 @@
 
     const posts = [];
     state.occasions.forEach((occ) => {
-      occ.moments.forEach((m) => posts.push({ ...m, friend: occ.friend, daysUntilBirthday: occ.daysUntilBirthday }));
+      occ.moments.forEach((m) => posts.push({ ...m, friend: occ.friend, occasion: occ.occasion }));
     });
     posts.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
@@ -314,12 +345,9 @@
   function renderFeedPost(post) {
     const card = document.createElement('div');
     card.className = 'feed-post';
-    const showPill = post.daysUntilBirthday !== null && post.daysUntilBirthday <= 45;
-    const pillText = post.daysUntilBirthday === 0
-      ? '🎂 today'
-      : post.daysUntilBirthday === 1
-      ? '🎂 tomorrow'
-      : `🎂 in ${post.daysUntilBirthday}d`;
+    const occ = post.occasion;
+    const showPill = occ && occ.days <= 45;
+    const pillText = occ ? `${occ.emoji} ${occ.days === 0 ? 'today' : occ.days === 1 ? 'tomorrow' : `in ${occ.days}d`}` : '';
     card.innerHTML = `
       <div class="feed-post-header">
         <div class="feed-user-row">
@@ -353,7 +381,7 @@
     const actions = card.querySelector('.moment-actions');
     if (post.claimedByMe) {
       const btn = document.createElement('button');
-      btn.className = 'btn small secondary';
+      btn.className = 'btn small claimed';
       btn.textContent = '✓ Getting this';
       btn.addEventListener('click', async () => {
         await api('DELETE', `/api/moments/${post.id}/claim`);
@@ -543,10 +571,20 @@
     return el;
   }
 
-  // ---------------------------------------------------------------- friends
+  // ---------------------------------------------------------------- friends / circle
+  // The "Coming up" strip at the top is where occasion/countdown info lives — the plain
+  // list below stays a quiet, alphabetical directory so it doesn't repeat the same dates.
+  function occasionSubtitle(f) {
+    const n = f.momentCount || 0;
+    return `${n} moment${n === 1 ? '' : 's'}`;
+  }
+
   function renderFriends() {
     const el = document.createElement('div');
     el.innerHTML = `
+      <div id="upcoming-strip"></div>
+      <div class="section-title">People in your circle</div>
+      <div id="friends-list"></div>
       <div class="section-title">Your invite</div>
       <div class="card">
         <div style="font-size:14px; color:var(--ink-soft);">Share this so friends can join your circle.</div>
@@ -566,8 +604,6 @@
           <button class="btn secondary" type="submit">Connect</button>
         </form>
       </div>
-      <div class="section-title">People in your circle</div>
-      <div class="card" id="friends-list"></div>
     `;
     el.querySelector('#share-profile-btn').addEventListener('click', shareProfile);
     el.querySelector('#copy-invite').addEventListener('click', async () => {
@@ -593,23 +629,129 @@
       }
     });
 
+    const stripWrap = el.querySelector('#upcoming-strip');
     const list = el.querySelector('#friends-list');
+
     if (state.friends === null) {
       list.innerHTML = '<div class="spinner-row">Loading…</div>';
     } else if (state.friends.length === 0) {
-      list.innerHTML = '<div class="empty-state" style="padding:20px 4px;">No one yet — share your invite above.</div>';
+      stripWrap.innerHTML = '';
+      list.innerHTML = '<div class="empty-state" style="padding:20px 4px;">No one yet — share your invite below.</div>';
     } else {
-      list.innerHTML = state.friends.map((f) => `
-        <div class="list-row">
+      // Facebook-style "coming up soon" strip — small round avatars, nearest occasion first.
+      const upcoming = state.friends.filter((f) => f.occasion && f.occasion.days <= 30).slice(0, 10);
+      if (upcoming.length > 0) {
+        stripWrap.innerHTML = `
+          <div class="section-title">Coming up</div>
+          <div class="upcoming-scroll">
+            ${upcoming.map((f) => `
+              <button class="upcoming-item" data-id="${f.id}">
+                ${avatarNode(f, 'avatar-lg')}
+                <span class="upcoming-badge">${f.occasion.emoji} ${f.occasion.days === 0 ? 'today' : `${f.occasion.days}d`}</span>
+                <span class="upcoming-name">${esc(f.name.split(' ')[0])}</span>
+              </button>
+            `).join('')}
+          </div>
+        `;
+        stripWrap.querySelectorAll('.upcoming-item').forEach((btn) => {
+          btn.addEventListener('click', () => openFriend(btn.dataset.id));
+        });
+      } else {
+        stripWrap.innerHTML = '';
+      }
+
+      const alphabetical = [...state.friends].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+      list.innerHTML = `<div class="card" style="padding: 4px 4px;">${alphabetical.map((f) => `
+        <div class="list-row friend-row" data-id="${f.id}">
           <div class="row-main">
             ${avatarNode(f)}
             <div>
               <div class="row-title">${esc(f.name)}</div>
-              <div class="row-sub">${f.birthdayMonth ? `${MONTHS[f.birthdayMonth - 1]} ${f.birthdayDay}` : 'No birthday set'}</div>
+              <div class="row-sub">${occasionSubtitle(f)}</div>
             </div>
           </div>
         </div>
-      `).join('');
+      `).join('')}</div>`;
+      list.querySelectorAll('.friend-row').forEach((row) => {
+        row.addEventListener('click', () => openFriend(row.dataset.id));
+      });
+    }
+    return el;
+  }
+
+  // ---------------------------------------------------------------- individual friend's page
+  function renderFriendDetail() {
+    const el = document.createElement('div');
+    if (!state.friendDetail) {
+      el.innerHTML = '<div class="spinner-row">Loading…</div>';
+      return el;
+    }
+    const { friend, moments } = state.friendDetail;
+    const occ = friend.occasion;
+
+    // build the period filter options from the moments we have
+    const periods = Array.from(new Set(moments.map((m) => {
+      const d = new Date(m.created_at);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }))).sort().reverse();
+
+    let filtered = state.friendPeriod === 'all'
+      ? moments
+      : moments.filter((m) => {
+        const d = new Date(m.created_at);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === state.friendPeriod;
+      });
+    filtered = [...filtered].sort((a, b) => (
+      state.friendSort === 'rating' ? b.rating - a.rating : new Date(b.created_at) - new Date(a.created_at)
+    ));
+
+    el.innerHTML = `
+      <div class="friend-detail-header">
+        ${avatarNode(friend, 'avatar-xl')}
+        <div class="name">${esc(handle(friend.name))}</div>
+        ${occ ? `<div class="occ-note">${occ.emoji} ${occ.label} ${occ.days === 0 ? 'is today' : occ.days === 1 ? 'is tomorrow' : `in ${occ.days} days`}</div>` : ''}
+      </div>
+      <div class="sort-row">
+        <button class="sort-btn ${state.friendSort === 'new' ? 'active' : ''}" data-sort="new">Newest</button>
+        <button class="sort-btn ${state.friendSort === 'rating' ? 'active' : ''}" data-sort="rating">Most wanted</button>
+      </div>
+      ${periods.length > 1 ? `
+      <div class="filter-row">
+        <select id="period-filter" class="filter-select">
+          <option value="all" ${state.friendPeriod === 'all' ? 'selected' : ''}>All time</option>
+          ${periods.map((p) => {
+            const [y, m] = p.split('-');
+            return `<option value="${p}" ${state.friendPeriod === p ? 'selected' : ''}>${MONTHS_FULL[Number(m) - 1]} ${y}</option>`;
+          }).join('')}
+        </select>
+      </div>
+      ` : ''}
+      <div id="friend-moments"></div>
+    `;
+    el.querySelectorAll('.sort-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.friendSort = btn.dataset.sort;
+        render();
+      });
+    });
+    const periodSelect = el.querySelector('#period-filter');
+    if (periodSelect) {
+      periodSelect.addEventListener('change', () => {
+        state.friendPeriod = periodSelect.value;
+        render();
+      });
+    }
+
+    const wrap = el.querySelector('#friend-moments');
+    if (filtered.length === 0) {
+      wrap.innerHTML = `
+        <div class="empty-state">
+          <span class="emoji">✨</span>
+          ${moments.length === 0 ? "Nothing saved yet." : 'Nothing in this period.'}
+        </div>`;
+    } else {
+      wrap.className = 'own-feed';
+      filtered.forEach((m) => wrap.appendChild(renderFeedPost({ ...m, friend, occasion: null })));
     }
     return el;
   }
