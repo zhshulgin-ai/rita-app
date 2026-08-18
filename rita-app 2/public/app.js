@@ -289,11 +289,6 @@
           <span class="emoji">👥</span>
           Add people to your circle to start seeing what they've saved.
         </div>`;
-      const btn = document.createElement('button');
-      btn.className = 'btn';
-      btn.textContent = 'Go to your circle';
-      btn.addEventListener('click', () => setView('friends'));
-      el.querySelector('.empty-state').after(btn);
       return el;
     }
 
