@@ -311,6 +311,22 @@ button:active, .btn:active, .nav-btn:active, .avatar-edit:active {
 .photo-source-btn { position: relative; overflow: hidden; flex: 1; text-align: center; }
 .photo-source-btn input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
+.location-input-row { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.location-input-row input { width: 100%; }
+.location-btn { width: auto; white-space: nowrap; }
+
+/* own moments on the profile, styled like feed posts rather than a bare grid */
+.own-feed { display: flex; flex-direction: column; gap: 14px; }
+.own-feed .feed-post {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(43, 36, 32, 0.06);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 0;
+  padding-bottom: 14px;
+}
+
 /* profile */
 .profile-edit-summary {
   cursor: pointer; font-weight: 600; font-size: 14px; color: var(--accent-ink);
