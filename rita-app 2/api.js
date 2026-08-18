@@ -31,6 +31,7 @@ function publicUser(u) {
     birthdayMonth: u.birthday_month,
     birthdayDay: u.birthday_day,
     bio: u.bio,
+    avatarPath: u.avatar_path || null,
     inviteCode: u.invite_code,
     createdAt: u.created_at,
   };
@@ -44,6 +45,7 @@ function publicFriend(u) {
     birthdayMonth: u.birthday_month,
     birthdayDay: u.birthday_day,
     bio: u.bio,
+    avatarPath: u.avatar_path || null,
   };
 }
 
@@ -160,6 +162,19 @@ const handlers = {
     db.prepare(
       'UPDATE users SET name = ?, bio = ?, birthday_month = ?, birthday_day = ? WHERE id = ?'
     ).run(name, bio, birthdayMonth, birthdayDay, user.id);
+    const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+    return { status: 200, body: { user: publicUser(updated) } };
+  },
+
+  'PUT /api/me/avatar': (req, res, user, body) => {
+    requireUser(user);
+    if (!body.avatarDataUrl) throw new ApiError(400, 'No photo provided');
+    const newPath = savePhoto(body.avatarDataUrl);
+    if (user.avatar_path) {
+      const oldFile = path.join(__dirname, user.avatar_path.replace(/^\//, ''));
+      fs.existsSync(oldFile) && fs.unlinkSync(oldFile);
+    }
+    db.prepare('UPDATE users SET avatar_path = ? WHERE id = ?').run(newPath, user.id);
     const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
     return { status: 200, body: { user: publicUser(updated) } };
   },

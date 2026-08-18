@@ -59,6 +59,13 @@ db.exec(`
   );
 `);
 
+// Migration: older deployments may not have avatar_path yet. Safe to re-run.
+try {
+  db.exec('ALTER TABLE users ADD COLUMN avatar_path TEXT DEFAULT \'\'');
+} catch {
+  // column already exists — fine
+}
+
 function uuid() {
   return crypto.randomUUID();
 }

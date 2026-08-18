@@ -6,6 +6,14 @@
   const MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const app = document.getElementById('app');
 
+  const ICONS = {
+    feed: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20a1 1 0 0 0 1 1H10v-5.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V21h3.5a1 1 0 0 0 1-1V9.5"/></svg>',
+    circle: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.5" cy="8" r="3"/><circle cx="16.3" cy="9.2" r="2.5"/><path d="M2.3 20a6.2 6.2 0 0 1 12.4 0"/><path d="M14.7 14.4a5.3 5.3 0 0 1 7 5.6"/></svg>',
+    profile: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>',
+    camera: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+    share: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8 15.8 6.2M8.2 13.2l7.6 4.6"/></svg>',
+  };
+
   const state = {
     user: null,
     view: 'feed', // feed | capture | friends | profile
@@ -36,19 +44,26 @@
       .join('');
   }
 
-  function birthdayPill(days) {
-    if (days === null) return '<span class="pill">No birthday set</span>';
-    const label = days === 0 ? 'Today! 🎉' : days === 1 ? 'Tomorrow' : `In ${days} days`;
-    return `<span class="pill ${days <= 45 ? 'soon' : ''}">${label}</span>`;
-  }
-
   function handle(name) {
     return (name || '').toLowerCase().replace(/\s+/g, '');
+  }
+
+  function avatarNode(user, sizeClass = '') {
+    const cls = `avatar ${sizeClass}`.trim();
+    if (user && user.avatarPath) {
+      return `<img class="${cls}" src="${esc(user.avatarPath)}" alt="" />`;
+    }
+    return `<div class="${cls}">${esc(initials(user && user.name))}</div>`;
   }
 
   function formatPostDate(iso) {
     const d = new Date(iso);
     return `${MONTHS_FULL[d.getMonth()]}, ${d.getDate()}. ${d.getFullYear()}`;
+  }
+
+  function formatShortDate(iso) {
+    const d = new Date(iso);
+    return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
   }
 
   function mapsUrl(location) {
@@ -65,6 +80,29 @@
     try { data = await res.json(); } catch { /* no body */ }
     if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
     return data;
+  }
+
+  function inviteUrlFor(code) {
+    return code ? `${location.origin}/?invite=${code}` : '';
+  }
+
+  async function shareProfile() {
+    const url = inviteUrlFor(state.inviteCode);
+    const text = "Join my circle on Rita — see what I've saved before my birthday.";
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Join me on Rita', text, url });
+      } catch {
+        // user backed out of the native share sheet — nothing to do
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url || state.inviteCode || '');
+      alert('Invite link copied!');
+    } catch {
+      alert(`Share this code: ${state.inviteCode}`);
+    }
   }
 
   function setView(view) {
@@ -92,8 +130,13 @@
         state.inviteCode = inviteCode;
       } else if (view === 'profile') {
         state.myMoments = null; render();
-        const { moments } = await api('GET', '/api/moments');
-        state.myMoments = moments;
+        const [momentsRes, friendsRes] = await Promise.all([
+          api('GET', '/api/moments'),
+          api('GET', '/api/friends'),
+        ]);
+        state.myMoments = momentsRes.moments;
+        state.friends = friendsRes.friends;
+        state.inviteCode = friendsRes.inviteCode;
       }
       render();
     } catch (e) {
@@ -132,27 +175,29 @@
         <p>Save the moments where you noticed something —<br>so the people who love you don't have to guess.</p>
       </div>
       ${state.error ? `<div class="error-banner">${esc(state.error)}</div>` : ''}
-      <form id="auth-form">
-        ${!isLogin ? `
-        <div class="field"><label>Your name</label><input name="name" required autocomplete="name" /></div>
-        ` : ''}
-        <div class="field"><label>Email</label><input name="email" type="email" required autocomplete="email" /></div>
-        <div class="field"><label>Password</label><input name="password" type="password" required minlength="6" autocomplete="${isLogin ? 'current-password' : 'new-password'}" /></div>
-        ${!isLogin ? `
-        <div class="field-row">
-          <div class="field">
-            <label>Birth month</label>
-            <select name="birthdayMonth"><option value="">—</option>${MONTHS.map((m, i) => `<option value="${i + 1}">${m}</option>`).join('')}</select>
+      <div class="auth-card">
+        <form id="auth-form">
+          ${!isLogin ? `
+          <div class="field"><label>Your name</label><input name="name" required autocomplete="name" /></div>
+          ` : ''}
+          <div class="field"><label>Email</label><input name="email" type="email" required autocomplete="email" /></div>
+          <div class="field"><label>Password</label><input name="password" type="password" required minlength="6" autocomplete="${isLogin ? 'current-password' : 'new-password'}" /></div>
+          ${!isLogin ? `
+          <div class="field-row">
+            <div class="field">
+              <label>Birth month</label>
+              <select name="birthdayMonth"><option value="">—</option>${MONTHS.map((m, i) => `<option value="${i + 1}">${m}</option>`).join('')}</select>
+            </div>
+            <div class="field">
+              <label>Birth day</label>
+              <input name="birthdayDay" type="number" min="1" max="31" placeholder="14" />
+            </div>
           </div>
-          <div class="field">
-            <label>Birth day</label>
-            <input name="birthdayDay" type="number" min="1" max="31" placeholder="14" />
-          </div>
-        </div>
-        ` : ''}
-        <button class="btn" type="submit">${isLogin ? 'Log in' : 'Create account'}</button>
-      </form>
-      <div style="text-align:center; margin-top:16px;">
+          ` : ''}
+          <button class="btn" type="submit">${isLogin ? 'Log in' : 'Create account'}</button>
+        </form>
+      </div>
+      <div style="text-align:center; margin-top:18px;">
         ${isLogin
           ? `New to Rita? <button class="link-btn" id="switch-mode">Create an account</button>`
           : `Already have an account? <button class="link-btn" id="switch-mode">Log in</button>`}
@@ -200,12 +245,12 @@
     const el = document.createElement('div');
     el.className = 'bottom-nav';
     const items = [
-      { id: 'feed', icon: '🖼️', label: 'Feed' },
-      { id: 'friends', icon: '👥', label: 'Circle' },
-      { id: 'profile', icon: '🙂', label: 'Profile' },
+      { id: 'feed', icon: ICONS.feed, label: 'Feed' },
+      { id: 'friends', icon: ICONS.circle, label: 'Circle' },
+      { id: 'profile', icon: ICONS.profile, label: 'Profile' },
     ];
     el.innerHTML = items.map((it) => `
-      <button class="nav-btn ${it.fab ? 'fab' : ''} ${state.view === it.id ? 'active' : ''}" data-view="${it.id}">
+      <button class="nav-btn ${state.view === it.id ? 'active' : ''}" data-view="${it.id}">
         <span class="icon">${it.icon}</span>
         <span>${it.label}</span>
       </button>
@@ -274,21 +319,27 @@
   function renderFeedPost(post) {
     const card = document.createElement('div');
     card.className = 'feed-post';
+    const showPill = post.daysUntilBirthday !== null && post.daysUntilBirthday <= 45;
+    const pillText = post.daysUntilBirthday === 0
+      ? '🎂 today'
+      : post.daysUntilBirthday === 1
+      ? '🎂 tomorrow'
+      : `🎂 in ${post.daysUntilBirthday}d`;
     card.innerHTML = `
       <div class="feed-post-header">
         <div class="feed-user-row">
           <div class="row-main">
-            <div class="avatar">${esc(initials(post.friend.name))}</div>
+            ${avatarNode(post.friend)}
             <span class="feed-username">${esc(handle(post.friend.name))}</span>
           </div>
-          <span class="follow-pill" title="${post.daysUntilBirthday === null ? 'No birthday set' : birthdayPill(post.daysUntilBirthday).replace(/<[^>]+>/g, '')}">in circle</span>
+          ${showPill ? `<span class="pill soon">${pillText}</span>` : ''}
         </div>
         <div class="feed-meta-row">
-          <span class="feed-date">${formatPostDate(post.created_at)}</span>
+          <span class="feed-date">${formatShortDate(post.created_at)}</span>
           ${post.location ? `
-          <a class="feed-location" href="${mapsUrl(post.location)}" target="_blank" rel="noopener">
-            <span class="pin">📍</span><span>find on<br>the map</span>
-          </a>` : ''}
+          <span class="meta-dot">·</span>
+          <a class="feed-location-link" href="${mapsUrl(post.location)}" target="_blank" rel="noopener">📍 ${esc(post.location)}</a>
+          ` : ''}
         </div>
       </div>
       ${post.photo_path
@@ -303,6 +354,7 @@
         <div class="moment-actions"></div>
       </div>
     `;
+    card.querySelector('.feed-date').title = formatPostDate(post.created_at);
     const actions = card.querySelector('.moment-actions');
     if (post.claimedByMe) {
       const btn = document.createElement('button');
@@ -441,14 +493,14 @@
   // ---------------------------------------------------------------- friends
   function renderFriends() {
     const el = document.createElement('div');
-    const inviteUrl = state.inviteCode ? `${location.origin}/?invite=${state.inviteCode}` : '';
     el.innerHTML = `
       <div class="section-title">Your invite</div>
       <div class="card">
         <div style="font-size:14px; color:var(--ink-soft);">Share this so friends can join your circle.</div>
+        <button class="btn" id="share-profile-btn" style="margin-top:12px;">${ICONS.share} Share profile</button>
         <div class="invite-box">
           <span class="invite-code" id="invite-code">${state.inviteCode ? esc(state.inviteCode) : '…'}</span>
-          <button class="btn small secondary" id="copy-invite">Copy link</button>
+          <button class="btn small secondary" id="copy-invite">Copy code</button>
         </div>
       </div>
       <div class="section-title">Join someone's circle</div>
@@ -464,12 +516,13 @@
       <div class="section-title">People in your circle</div>
       <div class="card" id="friends-list"></div>
     `;
+    el.querySelector('#share-profile-btn').addEventListener('click', shareProfile);
     el.querySelector('#copy-invite').addEventListener('click', async () => {
       const btn = el.querySelector('#copy-invite');
       try {
-        await navigator.clipboard.writeText(inviteUrl || state.inviteCode);
+        await navigator.clipboard.writeText(inviteUrlFor(state.inviteCode) || state.inviteCode);
         btn.textContent = 'Copied!';
-        setTimeout(() => (btn.textContent = 'Copy link'), 1500);
+        setTimeout(() => (btn.textContent = 'Copy code'), 1500);
       } catch {
         alert(`Share this code: ${state.inviteCode}`);
       }
@@ -496,7 +549,7 @@
       list.innerHTML = state.friends.map((f) => `
         <div class="list-row">
           <div class="row-main">
-            <div class="avatar">${esc(initials(f.name))}</div>
+            ${avatarNode(f)}
             <div>
               <div class="row-title">${esc(f.name)}</div>
               <div class="row-sub">${f.birthdayMonth ? `${MONTHS[f.birthdayMonth - 1]} ${f.birthdayDay}` : 'No birthday set'}</div>
@@ -514,9 +567,19 @@
     const u = state.user;
     el.innerHTML = `
       <div class="profile-header">
-        <div class="avatar">${esc(initials(u.name))}</div>
+        <label class="avatar-edit" id="avatar-edit">
+          ${avatarNode(u, 'avatar-xl')}
+          <span class="avatar-edit-badge">${ICONS.camera}</span>
+          <input type="file" accept="image/*" id="avatar-input" />
+        </label>
         <div class="name">${esc(u.name)}</div>
+        ${u.bio ? `<div class="profile-bio">${esc(u.bio)}</div>` : ''}
         <div class="email">${esc(u.email)}</div>
+        <div class="profile-stats">
+          <div class="stat"><span class="stat-num">${state.myMoments ? state.myMoments.length : '—'}</span><span class="stat-label">moments</span></div>
+          <div class="stat"><span class="stat-num">${state.friends ? state.friends.length : '—'}</span><span class="stat-label">circle</span></div>
+        </div>
+        <button class="btn secondary small" id="share-profile-btn">${ICONS.share} Share profile</button>
       </div>
       <details class="card">
         <summary class="profile-edit-summary">Edit profile</summary>
@@ -543,6 +606,25 @@
       <div id="my-moments-grid"></div>
       <button class="btn ghost" id="logout-btn" style="margin-top:20px;">Log out</button>
     `;
+    el.querySelector('#share-profile-btn').addEventListener('click', shareProfile);
+    el.querySelector('#avatar-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const badge = el.querySelector('.avatar-edit-badge');
+      const reader = new FileReader();
+      reader.onload = async () => {
+        if (badge) badge.innerHTML = '…';
+        try {
+          const { user } = await api('PUT', '/api/me/avatar', { avatarDataUrl: reader.result });
+          state.user = user;
+          render();
+        } catch (err) {
+          state.error = err.message;
+          render();
+        }
+      };
+      reader.readAsDataURL(file);
+    });
     el.querySelector('#profile-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
