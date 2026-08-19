@@ -30,6 +30,7 @@
     friendDetail: null, // { friend, moments }
     friendSort: 'new', // new | rating
     friendPeriod: 'all', // 'all' or 'YYYY-MM'
+    openMoment: null, // { moment, mode: 'own'|'friend', friend } — powers the grid-click lightbox
   };
 
   // ---------------------------------------------------------------- helpers
@@ -72,6 +73,31 @@
 
   function mapsUrl(location) {
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
+  }
+
+  // Same cold→hot stops as the .rating-bar-track gradient in styles.css, so the
+  // big number on the capture screen previews the color the saved bar will show.
+  const RATING_COLOR_STOPS = [
+    [0, [63, 127, 217]],
+    [20, [59, 173, 217]],
+    [38, [59, 201, 160]],
+    [52, [143, 201, 59]],
+    [66, [224, 201, 59]],
+    [80, [224, 151, 59]],
+    [100, [221, 74, 53]],
+  ];
+  function ratingColor(rating) {
+    const pct = Math.max(0, Math.min(100, (rating - 1) * (100 / 9)));
+    let lo = RATING_COLOR_STOPS[0], hi = RATING_COLOR_STOPS[RATING_COLOR_STOPS.length - 1];
+    for (let i = 0; i < RATING_COLOR_STOPS.length - 1; i++) {
+      if (pct >= RATING_COLOR_STOPS[i][0] && pct <= RATING_COLOR_STOPS[i + 1][0]) {
+        lo = RATING_COLOR_STOPS[i]; hi = RATING_COLOR_STOPS[i + 1]; break;
+      }
+    }
+    const span = hi[0] - lo[0];
+    const t = span === 0 ? 0 : (pct - lo[0]) / span;
+    const rgb = lo[1].map((c, i) => Math.round(c + (hi[1][i] - c) * t));
+    return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
   }
 
   async function api(method, path, body) {
@@ -180,6 +206,7 @@
     wrap.appendChild(renderScreen());
     wrap.appendChild(renderBottomNav());
     app.appendChild(wrap);
+    if (state.openMoment) app.appendChild(renderMomentModal());
   }
 
   // ---------------------------------------------------------------- auth screens
@@ -370,7 +397,7 @@
         : `<div class="feed-photo placeholder">✨</div>`}
       <div class="feed-body">
         <div class="rating-bar-row">
-          <div class="rating-bar-track"><div class="rating-bar-fill" style="width:${post.rating * 10}%"></div></div>
+          <div class="rating-bar-track"><div class="rating-bar-cover" style="width:${100 - post.rating * 10}%"></div></div>
           <span class="rating-bar-label">${post.rating}/10</span>
         </div>
         ${post.note ? `<div class="feed-caption">${esc(post.note)}</div>` : ''}
@@ -409,50 +436,119 @@
     return card;
   }
 
-  // ---------------------------------------------------------------- own moments, shown on the profile as feed-style posts
-  function renderOwnMomentPost(m) {
-    const card = document.createElement('div');
-    card.className = 'feed-post';
-    card.innerHTML = `
-      <div class="feed-post-header">
-        <div class="feed-user-row">
-          <div class="row-main">
-            ${avatarNode(state.user)}
-            <span class="feed-username">${esc(handle(state.user.name))}</span>
+  // ---------------------------------------------------------------- moments grid + lightbox (profile & friend detail)
+  // Instagram-profile-style: a 3-column grid of square thumbnails with a small
+  // rating badge, opening into a full-detail modal on click.
+  function renderMomentsGrid(moments, opts) {
+    const grid = document.createElement('div');
+    grid.className = 'moments-grid';
+    moments.forEach((m) => {
+      const item = document.createElement('div');
+      item.className = 'grid-item';
+      item.innerHTML = `
+        ${m.photo_path
+          ? `<img class="grid-photo" src="${esc(m.photo_path)}" alt="" />`
+          : `<div class="grid-photo placeholder">✨</div>`}
+        <div class="grid-badge" style="background:${ratingColor(m.rating)}">${m.rating}</div>
+      `;
+      item.addEventListener('click', () => openMomentModal(m, opts));
+      grid.appendChild(item);
+    });
+    return grid;
+  }
+
+  function openMomentModal(moment, { mode, friend }) {
+    state.openMoment = { moment, mode, friend: friend || null };
+    render();
+  }
+
+  function closeMomentModal() {
+    state.openMoment = null;
+    render();
+  }
+
+  function renderMomentModal() {
+    const { moment: m, mode, friend } = state.openMoment;
+    const owner = mode === 'own' ? state.user : friend;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeMomentModal(); });
+    overlay.innerHTML = `
+      <div class="modal-post">
+        <div class="modal-photo">
+          ${m.photo_path
+            ? `<img src="${esc(m.photo_path)}" alt="" />`
+            : `<div class="modal-photo-placeholder">✨</div>`}
+        </div>
+        <div class="modal-side">
+          <div class="modal-header">
+            ${avatarNode(owner, 'modal-avatar')}
+            <div>
+              <div class="modal-username">${esc(handle(owner && owner.name))}</div>
+              <div class="modal-date">${formatPostDate(m.created_at)}</div>
+            </div>
+            <button class="modal-close" id="modal-close" aria-label="Close">✕</button>
+          </div>
+          <div class="modal-body">
+            ${m.location ? `<div class="modal-location">📍 <a href="${mapsUrl(m.location)}" target="_blank" rel="noopener">${esc(m.location)}</a></div>` : ''}
+            ${m.note ? `<div class="modal-caption">${esc(m.note)}</div>` : ''}
+            <div class="modal-footer">
+              <div class="modal-actions"></div>
+              <div class="rating-bar-row">
+                <div class="rating-bar-track"><div class="rating-bar-cover" style="width:${100 - m.rating * 10}%"></div></div>
+                <span class="rating-bar-label">${m.rating}/10</span>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="feed-meta-row">
-          <span class="feed-date">${formatShortDate(m.created_at)}</span>
-          ${m.location ? `
-          <span class="meta-dot">·</span>
-          <a class="feed-location-link" href="${mapsUrl(m.location)}" target="_blank" rel="noopener">📍 ${esc(m.location)}</a>
-          ` : ''}
-        </div>
-      </div>
-      ${m.photo_path
-        ? `<img class="feed-photo" src="${esc(m.photo_path)}" alt="" />`
-        : `<div class="feed-photo placeholder">✨</div>`}
-      <div class="feed-body">
-        <div class="rating-bar-row">
-          <div class="rating-bar-track"><div class="rating-bar-fill" style="width:${m.rating * 10}%"></div></div>
-          <span class="rating-bar-label">${m.rating}/10</span>
-        </div>
-        ${m.note ? `<div class="feed-caption">${esc(m.note)}</div>` : ''}
-        <div class="moment-actions"></div>
       </div>
     `;
-    card.querySelector('.feed-date').title = formatPostDate(m.created_at);
-    const actions = card.querySelector('.moment-actions');
-    const btn = document.createElement('button');
-    btn.className = 'btn small ghost';
-    btn.textContent = 'Delete';
-    btn.addEventListener('click', async () => {
-      if (!confirm('Remove this saved moment?')) return;
-      await api('DELETE', `/api/moments/${m.id}`);
-      loadViewData('profile');
-    });
-    actions.appendChild(btn);
-    return card;
+    overlay.querySelector('#modal-close').addEventListener('click', closeMomentModal);
+
+    const actionsWrap = overlay.querySelector('.modal-actions');
+    if (mode === 'own') {
+      const btn = document.createElement('button');
+      btn.className = 'btn small ghost';
+      btn.textContent = 'Delete';
+      btn.addEventListener('click', async () => {
+        if (!confirm('Remove this saved moment?')) return;
+        await api('DELETE', `/api/moments/${m.id}`);
+        closeMomentModal();
+        loadViewData('profile');
+      });
+      actionsWrap.appendChild(btn);
+    } else {
+      if (m.claimedByMe) {
+        const btn = document.createElement('button');
+        btn.className = 'btn small claimed';
+        btn.textContent = '✓ Getting this';
+        btn.addEventListener('click', async () => {
+          await api('DELETE', `/api/moments/${m.id}/claim`);
+          closeMomentModal();
+          loadViewData('friend');
+        });
+        actionsWrap.appendChild(btn);
+      } else {
+        const btn = document.createElement('button');
+        btn.className = 'btn small ghost';
+        btn.textContent = 'Claim this';
+        btn.addEventListener('click', async () => {
+          await api('POST', `/api/moments/${m.id}/claim`);
+          closeMomentModal();
+          loadViewData('friend');
+        });
+        actionsWrap.appendChild(btn);
+      }
+      if (m.claimCount > 0) {
+        const note = document.createElement('div');
+        note.className = 'claim-note';
+        note.textContent = m.claimedByMe && m.claimCount === 1
+          ? 'Only you, so far'
+          : `Considered by: ${esc(m.claimedBy.join(', '))}`;
+        actionsWrap.after(note);
+      }
+    }
+    return overlay;
   }
 
   // ---------------------------------------------------------------- capture
@@ -543,8 +639,11 @@
     el.querySelector('#photo-input-camera').addEventListener('change', (e) => handlePhotoFile(e.target.files[0]));
     el.querySelector('#photo-input-library').addEventListener('change', (e) => handlePhotoFile(e.target.files[0]));
     const slider = el.querySelector('#rating-slider');
+    const ratingValueEl = el.querySelector('#rating-value');
+    ratingValueEl.style.color = ratingColor(Number(slider.value));
     slider.addEventListener('input', () => {
-      el.querySelector('#rating-value').textContent = slider.value;
+      ratingValueEl.textContent = slider.value;
+      ratingValueEl.style.color = ratingColor(Number(slider.value));
     });
     el.querySelector('#capture-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -750,8 +849,7 @@
           ${moments.length === 0 ? "Nothing saved yet." : 'Nothing in this period.'}
         </div>`;
     } else {
-      wrap.className = 'own-feed';
-      filtered.forEach((m) => wrap.appendChild(renderFeedPost({ ...m, friend, occasion: null })));
+      wrap.appendChild(renderMomentsGrid(filtered, { mode: 'friend', friend }));
     }
     return el;
   }
@@ -854,13 +952,14 @@
           Nothing saved yet. Next time you spot something that feels like <em>you</em>, save it.
         </div>`;
     } else {
-      const list = document.createElement('div');
-      list.className = 'own-feed';
-      state.myMoments.forEach((m) => list.appendChild(renderOwnMomentPost(m)));
-      gridWrap.appendChild(list);
+      gridWrap.appendChild(renderMomentsGrid(state.myMoments, { mode: 'own' }));
     }
     return el;
   }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && state.openMoment) closeMomentModal();
+  });
 
   // ---------------------------------------------------------------- boot
   async function boot() {
