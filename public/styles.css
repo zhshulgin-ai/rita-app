@@ -308,13 +308,24 @@ button:active, .btn:active, .nav-btn:active, .avatar-edit:active {
   flex: 1;
   height: 10px;
   border-radius: 999px;
-  background: var(--accent-soft);
+  position: relative;
   overflow: hidden;
+  background: linear-gradient(
+    90deg,
+    #3f7fd9 0%,
+    #3badd9 20%,
+    #3bc9a0 38%,
+    #8fc93b 52%,
+    #e0c93b 66%,
+    #e0973b 80%,
+    #dd4a35 100%
+  );
 }
-.rating-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-ink) 100%);
-  border-radius: 999px;
+.rating-bar-cover {
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  background: var(--surface);
+  border-radius: 0 999px 999px 0;
 }
 .rating-bar-label { font-weight: 700; font-size: 15px; color: var(--accent-ink); flex-shrink: 0; }
 
@@ -329,16 +340,104 @@ button:active, .btn:active, .nav-btn:active, .avatar-edit:active {
 .location-input-row input { width: 100%; }
 .location-btn { width: auto; white-space: nowrap; }
 
-/* own moments on the profile, styled like feed posts rather than a bare grid */
-.own-feed { display: flex; flex-direction: column; gap: 14px; }
-.own-feed .feed-post {
-  border: 1px solid var(--line);
+/* moments grid — profile & friend detail pages (Instagram profile-grid style) */
+.moments-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+}
+.grid-item {
+  position: relative;
+  aspect-ratio: 1;
+  cursor: pointer;
+  overflow: hidden;
+}
+.grid-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: var(--accent-soft);
+}
+.grid-photo.placeholder {
+  display: flex; align-items: center; justify-content: center; font-size: 32px;
+}
+.grid-badge {
+  position: absolute;
+  top: 6px; right: 6px;
+  min-width: 20px; height: 20px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 5px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+/* moment detail modal — opened from a grid item, Instagram-desktop lightbox style */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(20, 16, 12, 0.85);
+  z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.modal-post {
+  background: var(--surface);
   border-radius: var(--radius);
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(43, 36, 32, 0.06);
+  display: flex;
+  max-width: 720px;
+  width: 100%;
+  max-height: 86vh;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+.modal-photo {
+  flex: 1.2;
+  background: #1c1712;
+  display: flex; align-items: center; justify-content: center;
+  min-width: 0;
+}
+.modal-photo img { width: 100%; height: 100%; object-fit: contain; max-height: 86vh; }
+.modal-photo-placeholder { font-size: 64px; }
+.modal-side { flex: 1; display: flex; flex-direction: column; min-width: 260px; }
+.modal-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--line);
-  margin-bottom: 0;
-  padding-bottom: 14px;
+  flex-shrink: 0;
+}
+.avatar.modal-avatar { width: 36px; height: 36px; font-size: 14px; flex-shrink: 0; }
+.modal-username { font-weight: 700; font-size: 14px; }
+.modal-date { font-size: 12px; color: var(--ink-soft); }
+.modal-close {
+  margin-left: auto;
+  background: none; border: none;
+  font-size: 16px; color: var(--ink-soft);
+  cursor: pointer;
+  width: 28px; height: 28px;
+  border-radius: 999px;
+}
+.modal-close:active { background: var(--accent-soft); }
+.modal-body {
+  padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+  flex: 1;
+  overflow-y: auto;
+}
+.modal-location { font-size: 13px; }
+.modal-location a { color: var(--accent-ink); text-decoration: none; }
+.modal-caption { font-size: 14px; line-height: 1.5; color: var(--ink); }
+.modal-footer { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+.modal-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+@media (max-width: 640px) {
+  .modal-overlay { padding: 0; }
+  .modal-post { flex-direction: column; max-height: 100vh; max-width: 100%; border-radius: 0; }
+  .modal-photo { max-height: 45vh; }
+  .modal-photo img { max-height: 45vh; }
+  .modal-body { overflow-y: visible; }
 }
 
 /* profile */
