@@ -276,19 +276,17 @@
   function renderTopbar() {
     const el = document.createElement('div');
     el.className = 'topbar';
-    const titles = { feed: '', capture: 'Save a moment', friends: 'Circle', profile: 'Profile' };
     if (state.view === 'friend') {
       const name = state.friendDetail ? state.friendDetail.friend.name : '…';
       el.innerHTML = `
         <button class="topbar-back" id="topbar-back" aria-label="Back">←</button>
         <h1>${esc(name)}</h1>
-        <span style="width:26px;"></span>
       `;
       el.querySelector('#topbar-back').addEventListener('click', () => setView('friends'));
       return el;
     }
     el.innerHTML = `
-      <h1>${state.view === 'feed' ? '<span class="wordmark">Rita</span>' : esc(titles[state.view] || '')}</h1>
+      <h1><span class="wordmark">Rita</span></h1>
       ${state.view !== 'capture' ? '<button class="topbar-add" id="topbar-add" aria-label="Save a Rita">+</button>' : ''}
     `;
     const addBtn = el.querySelector('#topbar-add');
