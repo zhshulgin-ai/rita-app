@@ -55,7 +55,7 @@ button:active, .btn:active, .nav-btn:active, .avatar-edit:active {
   padding: calc(14px + var(--safe-top)) 20px 12px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   border-bottom: 1px solid var(--line);
 }
 
@@ -63,6 +63,11 @@ button:active, .btn:active, .nav-btn:active, .avatar-edit:active {
   font-size: 20px;
   margin: 0;
   letter-spacing: 0.2px;
+  text-align: center;
+  max-width: calc(100% - 76px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .topbar .wordmark {
@@ -74,6 +79,8 @@ button:active, .btn:active, .nav-btn:active, .avatar-edit:active {
 }
 
 .topbar-add {
+  position: absolute;
+  right: 20px;
   background: none;
   border: none;
   color: var(--accent);
@@ -85,6 +92,8 @@ button:active, .btn:active, .nav-btn:active, .avatar-edit:active {
 }
 
 .topbar-back {
+  position: absolute;
+  left: 20px;
   background: none;
   border: none;
   color: var(--accent-ink);
