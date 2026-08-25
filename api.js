@@ -36,6 +36,7 @@ function publicUser(u) {
     avatarPath: u.avatar_path || null,
     inviteCode: u.invite_code,
     createdAt: u.created_at,
+    occasion: nextOccasion(u),
   };
 }
 
