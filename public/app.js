@@ -100,6 +100,14 @@
     return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
   }
 
+  // Same warm↔cool scale as ratingColor, but driven by "days until" instead of
+  // desire: soon (within a month or so) reads hot/red, just-happened reads cold/blue.
+  function daysUntilColor(days) {
+    const clamped = Math.max(0, Math.min(365, days));
+    const pseudoRating = 1 + 9 * ((365 - clamped) / 365);
+    return ratingColor(pseudoRating);
+  }
+
   async function api(method, path, body) {
     const res = await fetch(path, {
       method,
@@ -864,6 +872,11 @@
           <span class="avatar-edit-badge">${ICONS.camera}</span>
           <input type="file" accept="image/*" id="avatar-input" />
         </label>
+        ${u.occasion ? `
+        <div class="profile-occasion" style="background:${daysUntilColor(u.occasion.days)}">
+          ${u.occasion.emoji} ${u.occasion.days === 0 ? `${u.occasion.label} is today!` : u.occasion.days === 1 ? `1 day until ${u.occasion.label.toLowerCase()}` : `${u.occasion.days} days until ${u.occasion.label.toLowerCase()}`}
+        </div>
+        ` : ''}
         <div class="name">${esc(u.name)}</div>
         ${u.bio ? `<div class="profile-bio">${esc(u.bio)}</div>` : ''}
         <div class="email">${esc(u.email)}</div>
