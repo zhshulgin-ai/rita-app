@@ -600,14 +600,15 @@
           const { latitude, longitude } = pos.coords;
           try {
             const res = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=16&addressdetails=1`,
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
               { headers: { Accept: 'application/json' } }
             );
             const data = await res.json();
             const a = data.address || {};
+            const streetish = a.house_number && a.road ? `${a.house_number} ${a.road}` : a.road;
             const label =
-              a.attraction || a.shop || a.amenity || a.building || a.leisure ||
-              a.road || a.neighbourhood || a.suburb || a.village || a.town || a.city ||
+              data.name || a.attraction || a.shop || a.amenity || a.building || a.leisure ||
+              streetish || a.neighbourhood || a.suburb || a.village || a.town || a.city ||
               data.display_name;
             locInput.value = label || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
           } catch {
@@ -622,7 +623,7 @@
           locBtn.disabled = false;
           locBtn.textContent = '📍 Use my location';
         },
-        { enableHighAccuracy: false, timeout: 8000 }
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
       );
     });
     function handlePhotoFile(file) {
