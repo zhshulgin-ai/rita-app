@@ -1,6 +1,6 @@
 :root {
-  --bg: #f6f1e7;
-  --surface: #fffdfa;
+  --bg: #ffffff;
+  --surface: #ffffff;
   --ink: #241f1a;
   --ink-soft: #6d6255;
   --accent: #b8501f;
@@ -49,7 +49,7 @@ button:active, .btn:active, .nav-btn:active, .avatar-edit:active {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: rgba(250, 246, 240, 0.92);
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: saturate(180%) blur(10px);
   -webkit-backdrop-filter: saturate(180%) blur(10px);
   padding: calc(14px + var(--safe-top)) 20px 12px;
@@ -254,7 +254,7 @@ button:active, .btn:active, .nav-btn:active, .avatar-edit:active {
 .screen-feed { padding-left: 0; padding-right: 0; }
 
 .feed-post {
-  border-bottom: 8px solid var(--bg);
+  border-bottom: 1px solid var(--line);
   padding-bottom: 18px;
   margin-bottom: 6px;
   background: var(--surface);
@@ -352,14 +352,15 @@ button:active, .btn:active, .nav-btn:active, .avatar-edit:active {
 /* moments grid — profile & friend detail pages (Instagram profile-grid style) */
 .moments-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 2px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
 }
 .grid-item {
   position: relative;
   aspect-ratio: 1;
   cursor: pointer;
   overflow: hidden;
+  border-radius: 12px;
 }
 .grid-photo {
   width: 100%;
