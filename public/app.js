@@ -407,6 +407,7 @@
           <span class="rating-bar-label">${post.rating}/10</span>
         </div>
         ${post.note ? `<div class="feed-caption">${esc(post.note)}</div>` : ''}
+        ${post.link ? `<a class="feed-link" href="${esc(post.link)}" target="_blank" rel="noopener">🔗 View link</a>` : ''}
         <div class="moment-actions"></div>
       </div>
     `;
@@ -498,6 +499,7 @@
           <div class="modal-body">
             ${m.location ? `<div class="modal-location">📍 <a href="${mapsUrl(m.location)}" target="_blank" rel="noopener">${esc(m.location)}</a></div>` : ''}
             ${m.note ? `<div class="modal-caption">${esc(m.note)}</div>` : ''}
+            ${m.link ? `<a class="feed-link" href="${esc(m.link)}" target="_blank" rel="noopener">🔗 View link</a>` : ''}
             <div class="modal-footer">
               <div class="modal-actions"></div>
               <div class="rating-bar-row">
@@ -591,6 +593,10 @@
             <button type="button" class="btn small secondary location-btn" id="use-location-btn">📍 Use my location</button>
           </div>
         </div>
+        <div class="field">
+          <label>Link (optional)</label>
+          <input name="link" type="text" inputmode="url" placeholder="Instagram post, product page…" />
+        </div>
         <button class="btn" type="submit">Save this moment</button>
       </form>
     `;
@@ -663,6 +669,7 @@
           rating: Number(fd.get('rating')),
           note: fd.get('note'),
           location: fd.get('location'),
+          link: fd.get('link'),
           photoDataUrl: state.photoDataUrl,
         });
         state.photoDataUrl = null;
@@ -872,12 +879,12 @@
           <span class="avatar-edit-badge">${ICONS.camera}</span>
           <input type="file" accept="image/*" id="avatar-input" />
         </label>
+        <div class="name">${esc(u.name)}</div>
         ${u.occasion ? `
-        <div class="profile-occasion" style="background:${daysUntilColor(u.occasion.days)}">
-          ${u.occasion.emoji} ${u.occasion.days === 0 ? `${u.occasion.label} is today!` : u.occasion.days === 1 ? `1 day until ${u.occasion.label.toLowerCase()}` : `${u.occasion.days} days until ${u.occasion.label.toLowerCase()}`}
+        <div class="profile-occasion" style="color:${daysUntilColor(u.occasion.days)}">
+          ${u.occasion.days === 0 ? 'Birthday is today! 🎉' : u.occasion.days === 1 ? '1 day till birthday' : `${u.occasion.days} days till birthday`}
         </div>
         ` : ''}
-        <div class="name">${esc(u.name)}</div>
         ${u.bio ? `<div class="profile-bio">${esc(u.bio)}</div>` : ''}
         <div class="email">${esc(u.email)}</div>
         <div class="profile-stats">
