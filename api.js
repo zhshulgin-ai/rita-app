@@ -52,6 +52,14 @@ function publicFriend(u) {
   };
 }
 
+// Lets people paste "instagram.com/p/xyz" without the scheme and still get a
+// working, clickable link.
+function normalizeLink(raw) {
+  const trimmed = String(raw || '').trim().slice(0, 500);
+  if (!trimmed) return '';
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
 function daysUntilBirthday(month, day, from = new Date()) {
   if (!month || !day) return null;
   const today = new Date(from.getFullYear(), from.getMonth(), from.getDate());
@@ -60,18 +68,14 @@ function daysUntilBirthday(month, day, from = new Date()) {
   return Math.round((next - today) / (1000 * 60 * 60 * 24));
 }
 
-// v1 of "important dates": everyone gets Christmas + New Year for free (same date for
-// everyone, nothing to configure), plus their own birthday. Whichever is soonest wins
-// and drives sorting/labeling in the circle list and feed.
+// Birthday-only for now — Christmas/New Year were tried as free default "important
+// dates" but felt like clutter (everyone already knows when those are), so this just
+// surfaces the one date that's actually personal: drives sorting/labeling in the
+// circle list, feed, and the user's own profile.
 function nextOccasion(friend, from = new Date()) {
-  const candidates = [
-    { kind: 'birthday', label: 'Birthday', emoji: '🎂', days: daysUntilBirthday(friend.birthday_month, friend.birthday_day, from) },
-    { kind: 'christmas', label: 'Christmas', emoji: '🎄', days: daysUntilBirthday(12, 25, from) },
-    { kind: 'newyear', label: 'New Year', emoji: '🎆', days: daysUntilBirthday(1, 1, from) },
-  ].filter((c) => c.days !== null);
-  if (candidates.length === 0) return null;
-  candidates.sort((a, b) => a.days - b.days);
-  return candidates[0];
+  const days = daysUntilBirthday(friend.birthday_month, friend.birthday_day, from);
+  if (days === null) return null;
+  return { kind: 'birthday', label: 'Birthday', emoji: '🎂', days };
 }
 
 function savePhoto(photoDataUrl) {
@@ -204,14 +208,15 @@ const handlers = {
     }
     const note = String(body.note || '').slice(0, 1000);
     const location = String(body.location || '').slice(0, 200);
+    const link = normalizeLink(body.link);
     let photoPath = null;
     if (body.photoDataUrl) photoPath = savePhoto(body.photoDataUrl);
 
     const id = uuid();
     db.prepare(
-      `INSERT INTO moments (id, owner_id, photo_path, rating, note, location, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).run(id, user.id, photoPath, rating, note, location, new Date().toISOString());
+      `INSERT INTO moments (id, owner_id, photo_path, rating, note, location, link, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(id, user.id, photoPath, rating, note, location, link, new Date().toISOString());
 
     const created = db.prepare('SELECT * FROM moments WHERE id = ?').get(id);
     return { status: 201, body: { moment: created } };
