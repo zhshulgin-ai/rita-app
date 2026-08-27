@@ -69,6 +69,13 @@ try {
   // column already exists — fine
 }
 
+// Migration: older deployments may not have moments.link yet. Safe to re-run.
+try {
+  db.exec('ALTER TABLE moments ADD COLUMN link TEXT DEFAULT \'\'');
+} catch {
+  // column already exists — fine
+}
+
 function uuid() {
   return crypto.randomUUID();
 }
