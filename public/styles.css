@@ -312,6 +312,18 @@ button:active, .btn:active, .nav-btn:active, .avatar-edit:active {
 .feed-body { padding: 14px 16px 0; display: flex; flex-direction: column; gap: 10px; }
 .feed-caption { font-size: 14px; line-height: 1.45; color: var(--ink); }
 
+.feed-link {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  padding: 5px 11px;
+  border-radius: 999px;
+  text-decoration: none;
+}
+
 .rating-bar-row { display: flex; align-items: center; gap: 10px; }
 .rating-bar-track {
   flex: 1;
@@ -698,15 +710,9 @@ img.avatar {
 }
 
 .profile-occasion {
-  display: inline-block;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 700;
-  padding: 5px 12px;
-  border-radius: 999px;
-  margin-bottom: 10px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  margin-top: 2px;
 }
 
 .profile-header .name { font-size: 19px; font-weight: 700; }
